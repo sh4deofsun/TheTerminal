@@ -1,0 +1,10 @@
+# Node
+node_modules/
+dist/
+*.log
+
+# postinstall ile @withfig/autocomplete'ten kopyalanır
+public/figspecs/
+
+# macOS
+.DS_Store
