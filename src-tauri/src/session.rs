@@ -80,9 +80,14 @@ struct Proxy {
 
 impl EventListener for Proxy {
     fn send_event(&self, ev: Event) {
-        if let Event::PtyWrite(s) = ev {
-            let _ = self.writer.lock().unwrap().write_all(s.as_bytes());
-        }
+        // Apps that probe the terminal (codex sends DSR, DA and OSC 10/11 at
+        // startup) block until answered, so every query event must be replied to.
+        let reply = match ev {
+            Event::PtyWrite(s) => s,
+            Event::ColorRequest(index, fmt) => fmt(crate::style::palette_rgb(index)),
+            _ => return,
+        };
+        let _ = self.writer.lock().unwrap().write_all(reply.as_bytes());
     }
 }
 
@@ -122,6 +127,14 @@ pub struct Session {
     pub dead: bool,
 }
 
+/// Only zsh is supported (decision 2); anything else falls back to /bin/zsh.
+pub fn shell_path() -> String {
+    std::env::var("SHELL")
+        .ok()
+        .filter(|s| s.ends_with("zsh"))
+        .unwrap_or_else(|| "/bin/zsh".into())
+}
+
 impl Session {
     pub fn spawn(
         scrollback: usize,
@@ -138,12 +151,7 @@ impl Session {
             .map_err(|e| e.to_string())?;
 
         let home = dirs::home_dir().ok_or("no home dir")?;
-        let shell = std::env::var("SHELL")
-            .ok()
-            .filter(|s| s.ends_with("zsh"))
-            .unwrap_or_else(|| "/bin/zsh".into());
-
-        let mut cmd = CommandBuilder::new(&shell);
+        let mut cmd = CommandBuilder::new(shell_path());
         cmd.arg("-l");
         cmd.cwd(&home); // decision 10: new sessions always start at $HOME
         cmd.env("TERM", "xterm-256color");
@@ -503,6 +511,98 @@ mod tests {
     use super::*;
     use std::sync::mpsc;
     use std::time::Duration;
+
+    /// Manual probe: `TT_CMD='claude' cargo test tui_probe -- --ignored --nocapture`
+    /// Dumps what the frontend would render for an interactive TUI.
+    #[test]
+    #[ignore]
+    fn tui_probe() {
+        use std::collections::BTreeMap;
+        let cmd = std::env::var("TT_CMD").unwrap_or_else(|_| "claude".into());
+        let zdot = crate::zdot::setup().unwrap();
+        let (mut s, writer, mut reader) = Session::spawn(1000, Some(&zdot)).unwrap();
+        s.resize(120, 40);
+
+        let (tx, rx) = mpsc::channel::<Vec<u8>>();
+        std::thread::spawn(move || {
+            let mut buf = [0u8; 8192];
+            while let Ok(n) = reader.read(&mut buf) {
+                if n == 0 || tx.send(buf[..n].to_vec()).is_err() {
+                    break;
+                }
+            }
+        });
+
+        let mut store: BTreeMap<u64, BTreeMap<usize, String>> = BTreeMap::new();
+        let mut screen: BTreeMap<usize, String> = BTreeMap::new();
+        let mut modes: Vec<String> = Vec::new();
+        let deadline = Instant::now() + Duration::from_secs(12);
+        // TT_PRE: command run first, to push the prompt down the grid.
+        let mut queue: Vec<String> = std::env::var("TT_PRE")
+            .ok()
+            .into_iter()
+            .chain(std::iter::once(cmd.clone()))
+            .collect();
+        queue.reverse();
+        let mut idle_at_prompt = 0;
+        let mut keys_sent = false;
+        let keys_at = Instant::now() + Duration::from_secs(6);
+        while Instant::now() < deadline {
+            if let Ok(b) = rx.recv_timeout(Duration::from_millis(100)) {
+                s.feed(&b);
+                idle_at_prompt = 0;
+            } else if s.state == ShellState::Prompt {
+                idle_at_prompt += 1;
+            }
+            if idle_at_prompt >= 3 {
+                idle_at_prompt = 0;
+                if let Some(next) = queue.pop() {
+                    writer
+                        .lock()
+                        .unwrap()
+                        .write_all(format!("{next}\r").as_bytes())
+                        .unwrap();
+                }
+            }
+            // TT_KEYS: raw bytes injected once, 5s after the last command started.
+            if !keys_sent && queue.is_empty() && Instant::now() > keys_at {
+                keys_sent = true;
+                if let Ok(k) = std::env::var("TT_KEYS") {
+                    let k = k.replace("\\r", "\r").replace("\\e", "\x1b");
+                    writer.lock().unwrap().write_all(k.as_bytes()).unwrap();
+                }
+            }
+            for ev in s.flush() {
+                match ev {
+                    Ev::Rows { block, rows } => {
+                        let e = store.entry(block).or_default();
+                        for (i, runs) in rows {
+                            e.insert(i, runs.iter().map(|r| r.x.as_str()).collect());
+                        }
+                    }
+                    Ev::Screen { rows, .. } => {
+                        for (i, runs) in rows {
+                            screen.insert(i, runs.iter().map(|r| r.x.as_str()).collect());
+                        }
+                    }
+                    Ev::Mode { mode, .. } => modes.push(mode),
+                    _ => {}
+                }
+            }
+        }
+        s.kill();
+        eprintln!("=== modes: {modes:?}");
+        for (b, rows) in &store {
+            eprintln!("--- block {b} ({} rows)", rows.len());
+            for (i, t) in rows {
+                eprintln!("{i:>3}|{}", t.trim_end());
+            }
+        }
+        eprintln!("--- screen ({} rows)", screen.len());
+        for (i, t) in &screen {
+            eprintln!("{i:>3}|{}", t.trim_end());
+        }
+    }
 
     /// End-to-end: real zsh + ZDOTDIR hook + scanner + block machine.
     /// Spawns the user's shell, runs `echo`, expects OSC 133 marks to produce

@@ -32,6 +32,8 @@ export type AppConfig = {
 
 export type PathEntry = { name: string; dir: boolean };
 
+export type Alias = { name: string; value: string; own: boolean };
+
 export const getConfig = () => invoke<AppConfig>("get_config");
 export const createSession = () => invoke<number>("create_session");
 export const closeSession = (id: number) => invoke("close_session", { id });
@@ -43,6 +45,10 @@ export const readHistory = () => invoke<string[]>("read_history");
 export const completePath = (id: number, prefix: string) =>
   invoke<PathEntry[]>("complete_path", { id, prefix });
 export const listBins = () => invoke<string[]>("list_bins");
+export const listAliases = () => invoke<Alias[]>("list_aliases");
+export const setAlias = (name: string, value: string) =>
+  invoke("set_alias", { name, value });
+export const removeAlias = (name: string) => invoke("remove_alias", { name });
 
 export const onSessEvt = (cb: (e: SessEvt) => void) =>
   listen<SessEvt>("sess", (e) => cb(e.payload));

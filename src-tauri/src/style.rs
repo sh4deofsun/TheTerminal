@@ -1,7 +1,8 @@
 //! Cell → styled-run conversion with a fixed dark palette (v1: single theme).
 
 use alacritty_terminal::term::cell::{Cell, Flags};
-use alacritty_terminal::vte::ansi::{Color, NamedColor, Rgb};
+pub use alacritty_terminal::vte::ansi::Rgb;
+use alacritty_terminal::vte::ansi::{Color, NamedColor};
 use serde::Serialize;
 
 pub const DEFAULT_FG: &str = "#dcdfe4";
@@ -72,6 +73,26 @@ fn resolve(c: Color) -> Option<String> {
         },
         Color::Spec(c) => Some(rgb(c)),
         Color::Indexed(i) => Some(indexed(i)),
+    }
+}
+
+fn parse_hex(s: &str) -> Rgb {
+    let v = u32::from_str_radix(s.trim_start_matches('#'), 16).unwrap_or(0);
+    Rgb {
+        r: (v >> 16) as u8,
+        g: (v >> 8) as u8,
+        b: v as u8,
+    }
+}
+
+/// Answer to an OSC 4/10/11/12 color query. Index >= 256 is fg/bg/cursor
+/// (`NamedColor::Foreground` and up); below that it is the 256-color palette.
+pub fn palette_rgb(index: usize) -> Rgb {
+    match index {
+        i if i < 256 => parse_hex(&indexed(i as u8)),
+        256 => parse_hex(DEFAULT_FG),   // Foreground
+        257 => parse_hex(DEFAULT_BG),   // Background
+        _ => parse_hex("#61afef"),      // Cursor
     }
 }
 

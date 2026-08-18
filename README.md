@@ -34,7 +34,13 @@ npm run tauri build   # macOS .app / .dmg
 ## Ayarlar
 
 `~/Library/Application Support/theterminal/config.toml` — font, scrollback,
-autocomplete/hook aç-kapa. GUI yok (v1).
+autocomplete/hook aç-kapa. Bunlar için GUI yok (v1).
+
+Ayarlar penceresinde (⚙ / ⌘,) şimdilik tek sekme var: **Alias**. Etkin alias'lar
+gerçek bir `zsh -i` üzerinden okunur (rc dosyaları + eklentiler dahil), düzenleme
+ve eklemeler `aliases.zsh` dosyasına yazılır. Kullanıcının rc dosyalarına
+dokunulmaz; ZDOTDIR sarmalayıcısı bu dosyayı en son source ettiği için düzenlenen
+alias rc'deki tanımı ezer. Değişiklikler sonradan açılan oturumlarda geçerlidir.
 
 ## Kısayollar
 
@@ -43,6 +49,7 @@ autocomplete/hook aç-kapa. GUI yok (v1).
 | ⌘T | Yeni oturum |
 | ⌘W | Oturumu kapat |
 | ⌘K | Blokları temizle |
+| ⌘, | Ayarlar |
 | ⌘1-9 | Oturuma geç |
 | Enter / Shift+Enter | Çalıştır / yeni satır |
 | Tab | Otomatik tamamlama |

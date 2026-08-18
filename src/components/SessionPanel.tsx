@@ -13,7 +13,7 @@ export function closeSessionUi(id: number) {
   removeSession(id);
 }
 
-export function SessionPanel() {
+export function SessionPanel(props: { onSettings: () => void }) {
   const [editing, setEditing] = createSignal<number | null>(null);
 
   return (
@@ -76,6 +76,11 @@ export function SessionPanel() {
             </div>
           )}
         </For>
+      </div>
+      <div class="panel-foot">
+        <button class="settings-btn" title="Ayarlar" onClick={props.onSettings}>
+          ⚙ Ayarlar
+        </button>
       </div>
     </aside>
   );

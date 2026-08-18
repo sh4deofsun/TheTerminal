@@ -24,11 +24,16 @@ impl Default for Config {
     }
 }
 
+/// `~/Library/Application Support/theterminal`
+pub fn dir() -> Option<std::path::PathBuf> {
+    dirs::config_dir().map(|d| d.join("theterminal"))
+}
+
 pub fn load() -> Config {
-    let Some(dir) = dirs::config_dir() else {
+    let Some(dir) = dir() else {
         return Config::default();
     };
-    let path = dir.join("theterminal").join("config.toml");
+    let path = dir.join("config.toml");
     match std::fs::read_to_string(&path) {
         Ok(s) => toml::from_str(&s).unwrap_or_default(),
         Err(_) => {

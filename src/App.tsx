@@ -2,7 +2,8 @@ import { Show, onMount, onCleanup, createSignal } from "solid-js";
 import "./App.css";
 import { SessionPanel, newSession, closeSessionUi } from "./components/SessionPanel";
 import { TerminalView } from "./components/TerminalView";
-import { store, setStore, activeSession, applyEvents, clearBlocks } from "./state";
+import { Settings } from "./components/Settings";
+import { store, setStore, activeSession, applyEvents, clearBlocks, modalOpen, setModalOpen } from "./state";
 import { getConfig, onSessEvt, readHistory } from "./ipc";
 import { setHistory } from "./autocomplete";
 
@@ -23,9 +24,20 @@ function App() {
     if (store.sessions.length === 0) await newSession();
   });
 
-  // Global shortcuts: ⌘T new, ⌘W close, ⌘K clear, ⌘1-9 switch.
+  // Global shortcuts: ⌘T new, ⌘W close, ⌘K clear, ⌘, settings, ⌘1-9 switch.
   const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape" && modalOpen()) {
+      e.preventDefault();
+      setModalOpen(false);
+      return;
+    }
     if (!e.metaKey) return;
+    if (e.key === ",") {
+      e.preventDefault();
+      setModalOpen(true);
+      return;
+    }
+    if (modalOpen()) return;
     if (e.key === "t") {
       e.preventDefault();
       newSession();
@@ -50,7 +62,7 @@ function App() {
 
   return (
     <div class="app">
-      <SessionPanel />
+      <SessionPanel onSettings={() => setModalOpen(true)} />
       <main class="main">
         <Show
           when={activeSession()}
@@ -59,6 +71,9 @@ function App() {
           {(s) => <TerminalView session={s()} autocomplete={autocomplete()} />}
         </Show>
       </main>
+      <Show when={modalOpen()}>
+        <Settings onClose={() => setModalOpen(false)} />
+      </Show>
     </div>
   );
 }

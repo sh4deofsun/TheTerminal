@@ -1,5 +1,5 @@
 import { For, Show, createSignal, onCleanup, onMount, createEffect, createMemo } from "solid-js";
-import type { Session } from "../state";
+import { modalOpen, type Session } from "../state";
 import { BlockView } from "./BlockView";
 import { PromptEditor } from "./PromptEditor";
 import { AltScreen } from "./AltScreen";
@@ -31,12 +31,19 @@ export function TerminalView(props: { session: Session; autocomplete: boolean })
   onMount(() => {
     const ro = new ResizeObserver(doResize);
     ro.observe(container);
-    doResize();
     onCleanup(() => ro.disconnect());
   });
 
+  // This component is reused across sessions (Show keeps it mounted), so the
+  // PTY of every newly selected session must be sized here — not just on mount,
+  // otherwise it stays at the 80x24 spawn default and TUIs render cramped.
+  createEffect(() => {
+    s().id;
+    queueMicrotask(doResize);
+  });
+
   // --- Raw input passthrough (running / alt-screen modes) ---
-  const rawMode = () => s().mode !== "prompt" && !s().exited;
+  const rawMode = () => s().mode !== "prompt" && !s().exited && !modalOpen();
 
   const onKey = (e: KeyboardEvent) => {
     if (!rawMode()) return;

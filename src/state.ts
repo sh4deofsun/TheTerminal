@@ -1,3 +1,4 @@
+import { createSignal } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 import type { Ev, Run } from "./ipc";
 
@@ -35,6 +36,9 @@ export type Session = {
   pendingCmd?: string;
   lastExit?: number | null;
 };
+
+/// While a modal is open the terminal must not swallow keystrokes.
+export const [modalOpen, setModalOpen] = createSignal(false);
 
 export const [store, setStore] = createStore<{
   sessions: Session[];

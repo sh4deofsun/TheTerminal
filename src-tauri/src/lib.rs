@@ -1,3 +1,4 @@
+mod alias;
 mod config;
 mod histfile;
 mod scanner;
@@ -111,6 +112,23 @@ fn resize_session(state: State<AppState>, id: u64, cols: u16, rows: u16) {
     if let Some(sess) = state.sessions.lock().unwrap().get(&id).cloned() {
         sess.lock().unwrap().resize(cols.max(2), rows.max(2));
     }
+}
+
+#[tauri::command]
+fn list_aliases(state: State<AppState>) -> Vec<alias::Alias> {
+    alias::list(state.zdot.as_deref())
+}
+
+/// Saved aliases apply to sessions started afterwards.
+#[tauri::command]
+fn set_alias(name: String, value: String) -> Result<(), String> {
+    alias::set(&name, &value)
+}
+
+/// Ours is dropped; an rc-defined one is suppressed with `unalias`.
+#[tauri::command]
+fn remove_alias(name: String) -> Result<(), String> {
+    alias::remove(&name)
 }
 
 #[tauri::command]
@@ -253,7 +271,10 @@ pub fn run() {
             resize_session,
             read_history,
             complete_path,
-            list_bins
+            list_bins,
+            list_aliases,
+            set_alias,
+            remove_alias
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

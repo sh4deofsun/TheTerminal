@@ -13,8 +13,12 @@ const ZPROFILE: &str = r#"
 [[ -f "$_TT_USER/.zprofile" ]] && ZDOTDIR="$_TT_USER" builtin source "$_TT_USER/.zprofile"
 "#;
 
+/// `{}` is the managed alias file, sourced after the user's rc so an alias
+/// edited in the settings UI wins over the rc definition.
 const ZSHRC: &str = r#"
 [[ -f "$_TT_USER/.zshrc" ]] && ZDOTDIR="$_TT_USER" builtin source "$_TT_USER/.zshrc"
+
+[[ -f "{}" ]] && builtin source "{}"
 
 autoload -Uz add-zsh-hook
 __tt_precmd() {
@@ -44,7 +48,9 @@ pub fn setup() -> std::io::Result<PathBuf> {
     std::fs::create_dir_all(&dir)?;
     std::fs::write(dir.join(".zshenv"), ZSHENV)?;
     std::fs::write(dir.join(".zprofile"), ZPROFILE)?;
-    std::fs::write(dir.join(".zshrc"), ZSHRC)?;
+    let aliases = crate::alias::file().unwrap_or_default();
+    let aliases = aliases.display().to_string();
+    std::fs::write(dir.join(".zshrc"), ZSHRC.replace("{}", &aliases))?;
     std::fs::write(dir.join(".zlogin"), ZLOGIN)?;
     Ok(dir)
 }
